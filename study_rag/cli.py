@@ -13,49 +13,45 @@ from .embedder import Embedder
 from .generator import answer
 from .loaders import load_vault
 from .retriever import retrieve
-from .store import Store
+from .store import DEFAULT_DSN, Store
 
 app = typer.Typer(help="study-rag — local RAG over your study notes.")
 
 
 @app.command()
-def ingest(vault: str, db: str = "data"):
+def ingest(vault: str, dsn: str = DEFAULT_DSN):
     """Load a markdown vault, chunk, embed, and store."""
     notes = load_vault(vault)
     typer.echo(f"Loaded {len(notes)} notes from {vault}")
 
     embedder = Embedder()
-    store = Store(path=db)
+    store = Store(dsn=dsn)
 
     total = 0
     for note in notes:
         chunks = chunk_note(note)
         if not chunks:
             continue
+        store.upsert_note(note)
         embeddings = embedder.embed([c.text for c in chunks])
-        store.add(
-            ids=[c.chunk_id for c in chunks],
-            documents=[c.text for c in chunks],
-            embeddings=embeddings,
-            metadatas=[c.metadata for c in chunks],
-        )
+        store.add_chunks(chunks, embeddings)
         total += len(chunks)
 
-    typer.echo(f"Stored {total} chunks. Collection now holds {store.count()}.")
+    typer.echo(f"Stored {total} chunks. Store now holds {store.count()}.")
 
 
 @app.command()
-def query(question: str, db: str = "data", k: int = 4):
+def query(question: str, dsn: str = DEFAULT_DSN, k: int = 4):
     """Retrieve and answer a question from the store."""
     embedder = Embedder()
-    store = Store(path=db)
+    store = Store(dsn=dsn)
     hits = retrieve(question, store, embedder, k=k)
     typer.echo(answer(question, hits))
     typer.echo("\nSources: " + ", ".join(sorted({h.title for h in hits})))
 
 
 @app.command()
-def eval(db: str = "data", golden: str = "eval/golden.yaml"):
+def eval(dsn: str = DEFAULT_DSN, golden: str = "eval/golden.yaml"):
     """Run the golden-question hit-rate (Phase 5)."""
     raise typer.Exit("Eval harness arrives in Phase 5.")
 

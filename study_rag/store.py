@@ -1,50 +1,119 @@
-"""Persistent vector store wrapper around ChromaDB.
+"""Store: a single Postgres + pgvector database for both the relational data
+(notes, chunks, metadata) and the embedding vectors.
 
-Keeps Chroma's API in one place so the retriever/CLI stay storage-agnostic.
+Keeps all storage in one module so the retriever/CLI stay storage-agnostic.
+Schema lives in `schema.sql` (applied on container init); see DECISIONS.md.
 """
 
 from __future__ import annotations
 
-from pathlib import Path
-from typing import Any
+import os
+from typing import TYPE_CHECKING, Any
 
-import chromadb
+import psycopg
+from pgvector.psycopg import register_vector
 
-DEFAULT_PATH = "data"
-DEFAULT_COLLECTION = "study"
+if TYPE_CHECKING:  # avoid import cycles at runtime
+    from .chunker import Chunk
+    from .loaders import Note
+
+# Host port 5433 (see docker-compose.yml) avoids clashing with a native
+# Postgres commonly bound to 5432. Override with STUDY_RAG_DSN if needed.
+DEFAULT_DSN = "postgresql://study:study@localhost:5433/study_rag"
 
 
 class Store:
-    def __init__(self, path: str = DEFAULT_PATH, collection: str = DEFAULT_COLLECTION):
-        Path(path).mkdir(parents=True, exist_ok=True)
-        self.client = chromadb.PersistentClient(path=path)
-        self.collection = self.client.get_or_create_collection(collection)
+    def __init__(self, dsn: str | None = None):
+        self.dsn = dsn or os.environ.get("STUDY_RAG_DSN", DEFAULT_DSN)
+        self.conn = psycopg.connect(self.dsn, autocommit=True)
+        register_vector(self.conn)
 
-    def add(
-        self,
-        ids: list[str],
-        documents: list[str],
-        embeddings: list[list[float]],
-        metadatas: list[dict[str, Any]],
-    ) -> None:
-        self.collection.upsert(
-            ids=ids,
-            documents=documents,
-            embeddings=embeddings,
-            metadatas=metadatas,
+    def upsert_note(self, note: Note) -> None:
+        """Insert (or update) the system-of-record row for a note."""
+        self.conn.execute(
+            """
+            INSERT INTO notes (note_id, title, source_type, source_path, tags)
+            VALUES (%s, %s, %s, %s, %s)
+            ON CONFLICT (note_id) DO UPDATE SET
+                title       = EXCLUDED.title,
+                source_type = EXCLUDED.source_type,
+                source_path = EXCLUDED.source_path,
+                tags        = EXCLUDED.tags
+            """,
+            (note.note_id, note.title, note.source_type, note.source_path, note.tags),
         )
+
+    def add_chunks(self, chunks: list[Chunk], embeddings: list[list[float]]) -> None:
+        """Insert (or update) section rows with their embedding vectors.
+
+        The parent note must already exist (call `upsert_note` first) so the
+        chunks.note_id foreign key resolves.
+        """
+        with self.conn.cursor() as cur:
+            for chunk, embedding in zip(chunks, embeddings):
+                cur.execute(
+                    """
+                    INSERT INTO chunks (chunk_id, note_id, section, chunk_text, embedding)
+                    VALUES (%s, %s, %s, %s, %s)
+                    ON CONFLICT (chunk_id) DO UPDATE SET
+                        note_id    = EXCLUDED.note_id,
+                        section    = EXCLUDED.section,
+                        chunk_text = EXCLUDED.chunk_text,
+                        embedding  = EXCLUDED.embedding
+                    """,
+                    (
+                        chunk.chunk_id,
+                        chunk.parent_id,
+                        chunk.metadata.get("section"),
+                        chunk.text,
+                        embedding,
+                    ),
+                )
 
     def query(
         self,
         embedding: list[float],
-        n_results: int = 4,
-        where: dict[str, Any] | None = None,
-    ) -> dict[str, Any]:
-        return self.collection.query(
-            query_embeddings=[embedding],
-            n_results=n_results,
-            where=where,
-        )
+        k: int = 4,
+        tags: list[str] | None = None,
+    ) -> list[dict[str, Any]]:
+        """Return the top-k chunks nearest the query embedding (cosine distance).
+
+        `tags` optionally restricts to notes overlapping any of the given tags.
+        Returns clean rows: {text, title, source_path, note_id, section, distance}.
+        """
+        # Cast the query list to `vector`: the <=> operator has no implicit
+        # cast from double precision[] (unlike inserting into a vector column).
+        sql = """
+            SELECT c.chunk_text, n.title, n.source_path, c.note_id, c.section,
+                   c.embedding <=> %(q)s::vector AS distance
+            FROM chunks c
+            JOIN notes n ON n.note_id = c.note_id
+            {where}
+            ORDER BY c.embedding <=> %(q)s::vector
+            LIMIT %(k)s
+        """
+        params: dict[str, Any] = {"q": embedding, "k": k}
+        where = ""
+        if tags:
+            where = "WHERE n.tags && %(tags)s"
+            params["tags"] = tags
+
+        with self.conn.cursor() as cur:
+            cur.execute(sql.format(where=where), params)
+            rows = cur.fetchall()
+
+        return [
+            {
+                "text": text,
+                "title": title,
+                "source_path": source_path,
+                "note_id": note_id,
+                "section": section,
+                "distance": distance,
+            }
+            for text, title, source_path, note_id, section, distance in rows
+        ]
 
     def count(self) -> int:
-        return self.collection.count()
+        row = self.conn.execute("SELECT count(*) FROM chunks").fetchone()
+        return row[0] if row else 0

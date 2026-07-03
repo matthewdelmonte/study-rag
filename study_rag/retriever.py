@@ -25,28 +25,23 @@ def retrieve(
     store: Store,
     embedder: Embedder,
     k: int = 4,
-    where: dict | None = None,
+    tags: list[str] | None = None,
 ) -> list[Retrieved]:
     """Embed the question, return top-k matching chunks.
 
     Phase 2: return the matched chunks directly.
-    Phase 4 (TODO): dedupe by parent_id and swap in the full parent note text
-    (parent-document retrieval), and support `where` metadata filters.
+    Phase 4 (TODO): dedupe by note_id and swap in the full parent note text
+    (parent-document retrieval).
     """
     qvec = embedder.embed_one(question)
-    res = store.query(qvec, n_results=k, where=where)
+    rows = store.query(qvec, k=k, tags=tags)
 
-    hits: list[Retrieved] = []
-    docs = res.get("documents", [[]])[0]
-    metas = res.get("metadatas", [[]])[0]
-    dists = res.get("distances", [[None] * len(docs)])[0]
-    for doc, meta, dist in zip(docs, metas, dists):
-        hits.append(
-            Retrieved(
-                text=doc,
-                title=meta.get("title", "?"),
-                source_path=meta.get("source_path", "?"),
-                score=dist,
-            )
+    return [
+        Retrieved(
+            text=row["text"],
+            title=row.get("title", "?"),
+            source_path=row.get("source_path", "?"),
+            score=row.get("distance"),
         )
-    return hits
+        for row in rows
+    ]

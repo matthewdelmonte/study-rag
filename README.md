@@ -11,7 +11,7 @@ Built as a learning project and AI-infrastructure portfolio piece.
 Building in phases — see `docs/architecture.md` and `DECISIONS.md`.
 
 - [x] Project scaffold
-- [ ] **Phase 1** — ingest Obsidian markdown (loader → chunker → embed → store)
+- [x] **Phase 1** — ingest Obsidian markdown (loader → chunker → embed → store)
 - [ ] Phase 2 — retrieval + cited answering
 - [ ] Phase 3 — PDFs + articles
 - [ ] Phase 4 — parent-doc retrieval + metadata filtering
@@ -30,7 +30,13 @@ Building in phases — see `docs/architecture.md` and `DECISIONS.md`.
 ```bash
 python -m venv .venv && source .venv/bin/activate
 pip install -e .
+
+docker compose up -d   # start Postgres + pgvector (schema auto-applied on first run)
 ```
+
+The store connects to `postgresql://study:study@localhost:5433/study_rag` by default
+(host port **5433** to avoid clashing with a local Postgres on 5432). Override with the
+`STUDY_RAG_DSN` env var or the `--dsn` flag on any command.
 
 ## Usage (target)
 
@@ -53,5 +59,6 @@ study_rag/
   cli.py         # ingest / query / eval
 eval/golden.yaml # question → expected note
 docs/            # architecture + decisions
+schema.sql       # notes + chunks tables, HNSW cosine index (applied on DB init)
 docker-compose.yml # Postgres + pgvector container (DB data lives in a Docker volume)
 ```

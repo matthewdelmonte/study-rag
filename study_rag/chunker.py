@@ -5,13 +5,19 @@ DESIGN (see DECISIONS.md):
   - Every chunk carries parent_id = the note id, so the retriever can do
     parent-document retrieval (match on section, return the whole note).
 
->>> PAIR-PROGRAMMING SPOT <<<
-This is the piece we reasoned through together — the first thing we build.
-Fill in `chunk_note` per the spec below.
+Decisions made while building this together:
+  - Split on `##` and `###` markdown headings; text before the first heading is
+    its own "intro" chunk.
+  - Embed each section prefixed with context ("Title > Heading\n\n<body>") so
+    short sections keep topical anchoring in their vector. The intro chunk is
+    prefixed with just the title.
+  - Sections with an empty body are skipped. Chunk indices are contiguous over
+    the kept chunks.
 """
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 
 from .loaders import Note
@@ -25,22 +31,47 @@ class Chunk:
     metadata: dict          # title, source_type, source_path, tags, section
 
 
+_HEADING = re.compile(r"^(#{2,3})\s+(.*\S)\s*$")
+
+
 def chunk_note(note: Note) -> list[Chunk]:
-    """Split a note into section-level chunks.
+    """Split a note into section-level chunks (see module docstring for rules)."""
+    # Bucket lines into sections. The leading (None) bucket holds intro text
+    # that appears before the first heading.
+    sections: list[tuple[str | None, list[str]]] = [(None, [])]
+    for line in note.text.splitlines():
+        m = _HEADING.match(line)
+        if m:
+            sections.append((m.group(2).strip(), []))
+        else:
+            sections[-1][1].append(line)
 
-    Spec to implement:
-      1. Split `note.text` on markdown section headings (`##`, `###`).
-         - Text before the first heading is its own chunk (intro).
-      2. For each section, build a Chunk with:
-           chunk_id  = f"{note.note_id}::{i}"
-           text      = the section body (optionally prefixed with the heading,
-                       so the embedding knows what the section is about)
-           parent_id = note.note_id
-           metadata  = {title, source_type, source_path, tags, section}
-      3. Return the list of chunks.
+    base_meta = {
+        "title": note.title,
+        "source_type": note.source_type,
+        "source_path": note.source_path,
+        "tags": note.tags,
+    }
 
-    Open question for us to decide while coding:
-      - Do we prepend the note title to each section's text so short sections
-        keep topical context in their embedding? (Recommended — test both.)
-    """
-    raise NotImplementedError("Let's build this together — Phase 1 core.")
+    chunks: list[Chunk] = []
+    for heading, body_lines in sections:
+        body = "\n".join(body_lines).strip()
+        if not body:
+            continue  # skip empty sections (e.g. a heading with no content)
+
+        if heading:
+            section = heading
+            text = f"{note.title} > {heading}\n\n{body}"
+        else:
+            section = note.title  # intro chunk
+            text = f"{note.title}\n\n{body}"
+
+        chunks.append(
+            Chunk(
+                chunk_id=f"{note.note_id}::{len(chunks)}",
+                text=text,
+                parent_id=note.note_id,
+                metadata={**base_meta, "section": section},
+            )
+        )
+    return chunks

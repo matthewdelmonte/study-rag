@@ -70,4 +70,27 @@ the rest of the pipeline is storage-agnostic.
 
 ---
 
+### 2026-07-03 — pgvector migration implemented + Phase 1 wired
+
+**What shipped.** The Postgres + pgvector store (decided 2026-07-02) is now implemented, and the
+Phase 1 ingest path runs end-to-end (`load → chunk → embed → store`).
+
+- **Schema (`schema.sql`)** applied on container init: `notes` + `chunks(embedding vector(768))`,
+  **HNSW index with `vector_cosine_ops`** (no training step; pairs with normalized
+  `nomic-embed-text`). Query with the `<=>` cosine-distance operator.
+- **Store API (`store.py`)** — psycopg 3 + `pgvector`: `upsert_note`, `add_chunks`,
+  `query(embedding, k, tags)` (returns clean row dicts), `count`. Connection via DSN, default
+  overridable with the `STUDY_RAG_DSN` env var.
+- **Host port 5433, not 5432.** A native Postgres already owns `localhost:5432`, so the container
+  publishes on **5433** to avoid clashing with it. Default DSN points at 5433.
+- **`vector` cast in queries.** The `<=>` operator has no implicit cast from `double precision[]`
+  (unlike inserting into a vector column), so the query embedding is cast with `%(q)s::vector`.
+
+**Chunker decisions (built interactively).** Split on `##`/`###` headings; text before the first
+heading is an "intro" chunk. Each section is embedded prefixed with context
+(`"Title > Heading\n\n<body>"`; intro is prefixed with the title alone) so short sections keep
+topical anchoring. Empty sections are skipped; chunk indices are contiguous.
+
+---
+
 *Append new decisions below with a date heading.*

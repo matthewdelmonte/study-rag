@@ -4,7 +4,8 @@ version = "0.1.0"
 description = "Fully-local retrieval-augmented knowledge base over personal AI-infrastructure study notes."
 requires-python = ">=3.10"
 dependencies = [
-    "chromadb>=0.5",     # local persistent vector store
+    "psycopg[binary]>=3.2",  # Postgres driver (store)
+    "pgvector>=0.3",         # pgvector adapter: vector(768) <-> Python
     "ollama>=0.3",       # embeddings + LLM, single local runtime
     "pymupdf>=1.24",     # PDF parsing (Phase 3)
     "pyyaml>=6.0",       # eval golden set
