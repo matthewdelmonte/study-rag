@@ -1,0 +1,22 @@
+[project]
+name = "study-rag"
+version = "0.1.0"
+description = "Fully-local retrieval-augmented knowledge base over personal AI-infrastructure study notes."
+requires-python = ">=3.10"
+dependencies = [
+    "chromadb>=0.5",     # local persistent vector store
+    "ollama>=0.3",       # embeddings + LLM, single local runtime
+    "pymupdf>=1.24",     # PDF parsing (Phase 3)
+    "pyyaml>=6.0",       # eval golden set
+    "typer>=0.12",       # CLI
+]
+
+[project.scripts]
+study-rag = "study_rag.cli:app"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["study_rag"]

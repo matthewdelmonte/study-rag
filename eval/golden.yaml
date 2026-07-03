@@ -1,0 +1,9 @@
+# Golden question set (Phase 5).
+# Each entry: a question, and the note title(s) that SHOULD be retrieved to answer it.
+# Used to measure retrieval hit-rate as we tune chunking and embeddings.
+
+- question: "How does a KV cache evict entries under memory pressure?"
+  expected_notes:
+    - "KV Cache"
+
+# Add real entries once notes are ingested. Aim for ~15-20 covering your core topics.
