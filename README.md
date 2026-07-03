@@ -1,7 +1,8 @@
 # study-rag
 
 A fully-local retrieval-augmented knowledge base over personal AI-infrastructure study notes
-(Obsidian markdown, PDFs, clipped articles). Runs entirely on-device via Ollama + ChromaDB.
+(Obsidian markdown, PDFs, clipped articles). Runs entirely on-device via Ollama (embeddings + LLM)
+and Postgres + pgvector, orchestrated with Docker.
 
 Built as a learning project and AI-infrastructure portfolio piece.
 
@@ -19,6 +20,7 @@ Building in phases — see `docs/architecture.md` and `DECISIONS.md`.
 ## Prerequisites
 
 - Python ≥ 3.10
+- [Docker](https://www.docker.com) — runs the Postgres + pgvector database via `docker-compose`
 - [Ollama](https://ollama.com) running locally, with:
   - `ollama pull nomic-embed-text`   (embeddings)
   - `ollama pull qwen2.5:14b-instruct`   (answering — or `llama3.1:8b`)
@@ -45,11 +47,11 @@ study_rag/
   loaders.py     # source → raw text + metadata
   chunker.py     # section-level chunks + parent metadata
   embedder.py    # Ollama nomic-embed-text wrapper
-  store.py       # ChromaDB persistent wrapper
+  store.py       # Postgres + pgvector store wrapper
   retriever.py   # top-k + parent-document expansion
   generator.py   # Ollama chat → cited answer
   cli.py         # ingest / query / eval
 eval/golden.yaml # question → expected note
 docs/            # architecture + decisions
-data/            # local Chroma persistence (gitignored)
+docker-compose.yml # Postgres + pgvector container (DB data lives in a Docker volume)
 ```
