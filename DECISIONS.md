@@ -93,4 +93,52 @@ topical anchoring. Empty sections are skipped; chunk indices are contiguous.
 
 ---
 
+### 2026-07-04 — Idempotent re-ingest + nomic task prefixes
+
+Two correctness/quality fixes from an architecture review, ahead of Phase 2.
+
+**Re-ingest replaces a note's chunks atomically.** `chunk_id` is positional
+(`note_id::index`), and the old `add_chunks` only upserted — so re-ingesting an
+edited note left orphaned rows (a shrunk note kept its extra `::N` chunks; a
+reordered note overwrote the wrong ones). `add_chunks` now takes an explicit
+`note_id` and does `DELETE FROM chunks WHERE note_id = … ` then re-inserts, all
+in one transaction. The note is the unit of atomic replacement. The CLI now
+`upsert_note`s every note (even one with zero embeddable sections) so an
+emptied note still clears its stale chunks while keeping its system-of-record row.
+
+**Asymmetric embedding prefixes for `nomic-embed-text`.** The model is trained
+with `search_document:` on stored text and `search_query:` on the query;
+embedding both raw left recall on the table. `Embedder` gained `embed_documents`
+/ `embed_query` (prefixes are constructor params, default nomic's, set to `""`
+to disable for other models). Ingest uses the document prefix; the retriever
+uses the query prefix. *Consistency note:* any store populated before this must
+be re-ingested so stored vectors carry the document prefix — the live store was
+empty at change time, so nothing to migrate.
+
+Verified end-to-end against a throwaway `study_rag_verify` DB: prefixes reach
+Ollama, and re-ingesting a 4→2→0-section note leaves exactly 0 orphan chunks.
+
+---
+
+### 2026-07-04 — Phase 2 scope: carried-over review items
+
+The architecture review surfaced four more items. #1 (stale chunks) and the
+nomic prefixes shipped above; the rest are folded into **Phase 2**:
+
+- **`note_id` collisions across subfolders.** `note_id = note::<filename-stem>`
+  but the loader `rglob`s the whole vault, so two same-named files in different
+  folders collide and one silently overwrites the other. Fix: derive the id from
+  the path relative to the vault root, not just the stem.
+- **Store the parent-note body.** The headline design returns the *whole note*
+  to the LLM (Phase 4), but `notes` holds only metadata. Add a `notes.body`
+  column now (cheap while the schema is young) rather than re-reading from
+  `source_path` at query time.
+- **Widen tag parsing.** `_TAGS_LINE` only matches inline `tags: [a, b]`; it
+  silently drops Obsidian's YAML block form (`tags:\n  - a`) and inline `#tags`.
+  Tags drive Phase 4 filtering, so parse both frontmatter forms.
+- **Doc drift.** `architecture.md` §2–3 still shows ChromaDB; update it to
+  Postgres + pgvector so the portfolio artifact matches the code.
+
+---
+
 *Append new decisions below with a date heading.*

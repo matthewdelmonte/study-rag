@@ -43,23 +43,25 @@ class Store:
             (note.note_id, note.title, note.source_type, note.source_path, note.tags),
         )
 
-    def add_chunks(self, chunks: list[Chunk], embeddings: list[list[float]]) -> None:
-        """Insert (or update) section rows with their embedding vectors.
+    def add_chunks(
+        self, note_id: str, chunks: list[Chunk], embeddings: list[list[float]]
+    ) -> None:
+        """Replace all of a note's section rows with the given chunks + embeddings.
 
-        The parent note must already exist (call `upsert_note` first) so the
-        chunks.note_id foreign key resolves.
+        Deletes the note's existing chunks first, so re-ingesting an edited note
+        can't leave stale sections behind: chunk_ids are positional, so a note
+        that shrank or had a section reordered would otherwise orphan old rows.
+        Delete + inserts run in one transaction. The parent note must already
+        exist (call `upsert_note` first) so the chunks.note_id foreign key
+        resolves.
         """
-        with self.conn.cursor() as cur:
+        with self.conn.transaction(), self.conn.cursor() as cur:
+            cur.execute("DELETE FROM chunks WHERE note_id = %s", (note_id,))
             for chunk, embedding in zip(chunks, embeddings):
                 cur.execute(
                     """
                     INSERT INTO chunks (chunk_id, note_id, section, chunk_text, embedding)
                     VALUES (%s, %s, %s, %s, %s)
-                    ON CONFLICT (chunk_id) DO UPDATE SET
-                        note_id    = EXCLUDED.note_id,
-                        section    = EXCLUDED.section,
-                        chunk_text = EXCLUDED.chunk_text,
-                        embedding  = EXCLUDED.embedding
                     """,
                     (
                         chunk.chunk_id,

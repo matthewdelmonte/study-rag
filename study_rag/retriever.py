@@ -33,7 +33,7 @@ def retrieve(
     Phase 4 (TODO): dedupe by note_id and swap in the full parent note text
     (parent-document retrieval).
     """
-    qvec = embedder.embed_one(question)
+    qvec = embedder.embed_query(question)
     rows = store.query(qvec, k=k, tags=tags)
 
     return [

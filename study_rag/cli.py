@@ -29,12 +29,11 @@ def ingest(vault: str, dsn: str = DEFAULT_DSN):
 
     total = 0
     for note in notes:
-        chunks = chunk_note(note)
-        if not chunks:
-            continue
         store.upsert_note(note)
-        embeddings = embedder.embed([c.text for c in chunks])
-        store.add_chunks(chunks, embeddings)
+        chunks = chunk_note(note)
+        texts = [c.text for c in chunks]
+        embeddings = embedder.embed_documents(texts) if texts else []
+        store.add_chunks(note.note_id, chunks, embeddings)
         total += len(chunks)
 
     typer.echo(f"Stored {total} chunks. Store now holds {store.count()}.")
