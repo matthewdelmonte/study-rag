@@ -7,7 +7,7 @@ This guide explains how to connect PyCharm's AI Assistant to a local Ollama mode
 - PyCharm installed
 - Ollama installed
 - Access to JetBrains AI Assistant
-- A local model tag to pull, such as `qwen3.6`
+- A local model tag to pull, such as `qwen3:8b` or `qwen2.5-coder:7b`
 
 ## 1. Install and Run Ollama
 
@@ -17,7 +17,7 @@ This guide explains how to connect PyCharm's AI Assistant to a local Ollama mode
 ollama serve
 ```
 
-## 2. Pull the model
+## 2. Pull the Model
 ```bash
 ollama pull <model-tag>   # e.g. qwen3:8b  or  qwen2.5-coder:7b
 ```
@@ -26,22 +26,22 @@ Verify it registered:
 ollama list
 ```
 
-## 3. Install the JetBrains AI Assistant plugin
+## 3. Install the JetBrains AI Assistant Plugin
 - `Settings → Plugins` → install **AI Assistant**
 - Local-model use requires a JetBrains AI subscription (covered by the free tier)
 
-## 4. Connect Ollama as a provider
+## 4. Connect Ollama as a Provider
 - `Settings → Tools → AI Assistant → Providers & API keys`
 - In **Third-party AI providers**, select **Ollama**
 - Set the URL to `http://localhost:11434` → **Test Connection** → **Apply**
 
-## 5. Enable the specific model
+## 5. Enable the specific Model
 - `Settings → Tools → AI Assistant → Models`
 - Toggle your pulled model on so it appears in the AI Chat / model picker
 
 ---
 
-## Troubleshooting: "connected but no model showing"
+## Troubleshooting: "Connected but No Model Showing"
 A successful **Test Connection** only confirms PyCharm can reach the Ollama
 server — it does not surface individual models.
 
@@ -53,7 +53,7 @@ server — it does not surface individual models.
 2. In `Settings → Tools → AI Assistant → Models`, toggle the specific model on.
    Reopening this pane also forces a refresh of the model list.
 
-## Known caveats
+## Known Caveats
 - Local models **cannot** invoke tools from MCP servers.
 - Default context window for local models is capped at **64,000 tokens**.
 - **Agent plugins (Cline, Goose):** since the April 2026 updates, the standalone
@@ -61,7 +61,9 @@ server — it does not surface individual models.
   **OpenAI-compatible custom provider** pointed at `http://localhost:11434`
   instead. Ollama's own API is unchanged — this is a plugin-side change.
 
-## Alternative: calling Ollama from Python (no subscription needed)
+## Alternative: Calling Ollama from Python (no subscription needed)
+
+Install the required package into your project interpreter:
 ```python
 import ollama
 
@@ -72,3 +74,5 @@ response = ollama.chat(
 print(response["message"]["content"])
 ```
 Install into the project interpreter: `pip install ollama`
+
+Then call the model in your script:
