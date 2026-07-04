@@ -6,6 +6,10 @@ and Postgres + pgvector, orchestrated with Docker.
 
 Built as a learning project and AI-infrastructure portfolio piece.
 
+> Part of the broader [`ai-engineering`](../ai-engineering) career-transition plan — this repo is
+> the live RAG implementation that informs **Project B (RFI/RFP Knowledge Agent)** in
+> `docs/q2-projects.md`.
+
 ## Status
 
 Building in phases — see `docs/architecture.md` and `DECISIONS.md`.
