@@ -1,4 +1,4 @@
-# study-rag
+# self-hosted-rag
 
 A fully-local retrieval-augmented knowledge base over personal AI-infrastructure study notes
 (Obsidian markdown, PDFs, clipped articles). Runs entirely on-device via Ollama (embeddings + LLM)
